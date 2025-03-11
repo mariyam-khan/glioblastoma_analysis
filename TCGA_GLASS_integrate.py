@@ -349,7 +349,7 @@ def TCGA_GLASS_integrate():
     plt.legend()
     output_dir ='/home/mkh062/Desktop/scratch/TCGA_project/processed_data/TCGA_GLASS_integrated/'
     pca_plot_path = os.path.join(output_dir, "PCA_plot.png")
-    plt.savefig(pca_plot_path, dpi=300, bbox_inches='tight')
+    #plt.savefig(pca_plot_path, dpi=300, bbox_inches='tight')
     plt.show()
     combined_data = combined_data.drop(columns=['Platform'])
     return combined_data
@@ -362,16 +362,17 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     tcga_glass = TCGA_GLASS_integrate()
     print("tcga_glass", tcga_glass)
-    thresholds_fixed = [24, 60]
+    #thresholds_fixed = [24, 60]
+    thresholds_fixed = [36, 48]
     thresholds_range = [(24, 48), (24, 60)]
 
-    # for threshold in thresholds_fixed:
-    #     for ds_data, ds_name in [(tcga_glass, "GLASS_TCGA")]:
-    #         res = limma(ds_data.copy(),
-    #                                    threshold=threshold,
-    #                                    consortium=ds_name,
-    #                                    threshold_type="fixed",
-    #                                    outdir=output_dir)
+    for threshold in thresholds_fixed:
+        for ds_data, ds_name in [(tcga_glass, "GLASS_TCGA")]:
+            res = limma(ds_data.copy(),
+                                       threshold=threshold,
+                                       consortium=ds_name,
+                                       threshold_type="fixed",
+                                       outdir=output_dir)
     #
     # # range
     # for (low,high) in thresholds_range:
@@ -381,7 +382,7 @@ def main():
     #                                    consortium=ds_name,
     #                                    threshold_type="range",
     #                                    outdir=output_dir)
-    analyze_dataset(tcga_glass, "GLASS_TCGA", outdir, alpha_fdr=0.1)
+    #analyze_dataset(tcga_glass, "GLASS_TCGA", outdir, alpha_fdr=0.1)
 
 if __name__=="__main__":
     main()

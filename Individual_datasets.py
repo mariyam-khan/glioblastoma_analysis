@@ -17,6 +17,175 @@ pandas2ri.activate()
 # 1. Helper functions
 ###############################################################################
 
+def define_survival_groups(df, low_threshold, high_threshold):
+    """
+    From the main 'merged' dataframe, subset two groups:
+      Low group:   (dead) with OS <= low_threshold
+      High group:  (alive or dead) with OS >= high_threshold
+
+    Returns a new DataFrame with only those samples,
+    and an extra column 'Group' = 'Low' or 'High'.
+    """
+    # We only keep:
+    #  - Low: df['case.vital.status'] == 'Dead' AND OS <= low_threshold
+    #  - High: OS > high_threshold (regardless of vital status)
+    data = df.copy()
+    if pd.api.types.is_numeric_dtype(data['case.vital.status'] ):
+        data['case.vital.status']  = data['case.vital.status'] .map({0: 'alive', 1: 'dead'}).astype(str)
+
+    data = data[~((data['Overall.Survival.Months'] <= low_threshold) & (data['case.vital.status'] == 'alive'))]
+    data = data[(data['Overall.Survival.Months'] <= low_threshold) | (data['Overall.Survival.Months'] > high_threshold)]
+
+    median_survival_r = low_threshold
+
+    data['Group'] = np.where(data['Overall.Survival.Months'] > median_survival_r, 'High', 'Low')
+    print("data", data)
+    return data
+
+
+def define_survival_groups_all(df):
+    """
+    Assigns survival groups based on Overall Survival Months:
+      - '0-24 months'
+      - '>24 and ≤48 months'
+      - '>48 and ≤60 months'
+      - '>60 months'
+
+    Adds a new column 'Group' with these categories.
+    """
+    data = df.copy()
+
+    # Convert numeric vital status if needed
+    if pd.api.types.is_numeric_dtype(data['case.vital.status']):
+        data['case.vital.status'] = data['case.vital.status'].map({0: 'alive', 1: 'dead'}).astype(str)
+    print("\n🔹 BEFORE ASSIGNING GROUPS: Sample Data\n", data[['Overall.Survival.Months', 'case.vital.status']])
+    # Define survival groups
+    # conditions = [
+    #     (data['Overall.Survival.Months'] <= 24) & (data['case.vital.status'] == 'dead'),
+    #     (data['Overall.Survival.Months'] > 24) & (data['Overall.Survival.Months'] <= 48) & (data['case.vital.status'] == 'dead'),
+    #     (data['Overall.Survival.Months'] > 48) & (data['Overall.Survival.Months'] <= 60) & (data['case.vital.status'] == 'dead'),
+    #     (data['Overall.Survival.Months'] > 60)
+    # ]
+    conditions = [
+        (data['Overall.Survival.Months'] <= 24),
+        (data['Overall.Survival.Months'] > 24) & (data['Overall.Survival.Months'] <= 48),
+        (data['Overall.Survival.Months'] > 48) & (data['Overall.Survival.Months'] <= 60),
+        (data['Overall.Survival.Months'] > 60)
+    ]
+    labels = ['0-24 months', '>24 and ≤48 months', '>48 and ≤60 months', '>60 months']
+
+    data['Group'] = np.select(conditions, labels, default='Unknown')
+    print("\n✅ AFTER ASSIGNING GROUPS: Sample Data\n", data[['Overall.Survival.Months', 'Group']])
+
+    return data
+
+def pca_plot_glass(df, gene_cols, title="PCA of GLASS Data"):
+    """
+    Performs PCA on gene expression data and plots PC1 vs PC2.
+    Colors samples based on survival groups.
+
+    df: DataFrame with gene expression data + 'Group' column.
+    gene_cols: List of gene names (columns) to use for PCA.
+    title: Title for the PCA plot.
+    """
+
+    # # Standardize gene expression data
+    # scaler = StandardScaler()
+    # df_scaled = scaler.fit_transform(df[gene_cols])
+
+    # Perform PCA
+    pca = PCA(n_components=2)
+    gene_data = df[gene_cols].values
+    # pca_results = pca.fit_transform(df_scaled)
+    pca_results = pca.fit_transform(gene_data)
+
+    # Create DataFrame for PCA results
+    pca_df = pd.DataFrame(pca_results, columns=['PC1', 'PC2'])
+    pca_df["Group"] = df["Group"]  # Add survival groups
+
+    # Define color palette for survival groups
+    palette = {
+        '0-24 months': 'red',
+        '>24 and ≤48 months': 'blue',
+        '>48 and ≤60 months': 'green',
+        '>60 months': 'orange'
+    }
+    # Plot PCA results
+    plt.figure(figsize=(10, 8))
+    sns.scatterplot(x="PC1", y="PC2", hue="Group", data=pca_df, palette=palette, s=100, alpha=0.7)
+    plt.axhline(0, color="gray", linestyle="--", linewidth=1)
+    plt.axvline(0, color="gray", linestyle="--", linewidth=1)
+    plt.title(title)
+    plt.xlabel(f"PC1 ({pca.explained_variance_ratio_[0] * 100:.1f}% Variance)")
+    plt.ylabel(f"PC2 ({pca.explained_variance_ratio_[1] * 100:.1f}% Variance)")
+    plt.legend(title="Survival Group")
+    plt.savefig("/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results/PCA_glass.png")
+    plt.show()
+
+
+import matplotlib.pyplot as plt
+import seaborn as sns
+import pandas as pd
+
+
+def boxplots_glass(df_24, df_24_48, df_24_60, df_60, genes_24_48, genes_24_60, genes_60):
+    """
+    Compares low/high groups in df_24 and df_24_48 for selected genes.
+
+    df_24: DataFrame with survival groups defined at 24 months
+    df_24_48: DataFrame with survival groups defined at 24-48 months
+    genes: list of gene names to boxplot
+    Produces a 2x3 grid with six boxplots (or however many genes up to 6).
+    """
+
+    # Define comparison cases with corresponding gene lists
+    comparisons = [
+        (df_24, df_24_48, genes_24_48, "24 vs 24-48 months"),
+        (df_24, df_24_60, genes_24_60, "24 vs 24-60 months"),
+        (df_24, df_60, genes_60, "24 vs 60 months")
+    ]
+
+    for df_a, df_b, genes, title in comparisons:
+        # Ensure we don't exceed 6 genes per comparison
+        genes = genes[:6] if len(genes) > 6 else genes
+
+        # Assign group labels
+        df_a["Timepoint"] = "Low (24)"
+        df_a.loc[df_a["Group"] == "High", "Timepoint"] = "High (24)"
+
+        df_b["Timepoint"] = f"Low ({title.split()[-2]})"
+        df_b.loc[df_b["Group"] == "High", "Timepoint"] = f"High ({title.split()[-2]})"
+
+        # Combine both DataFrames
+        combined_df = pd.concat([df_a, df_b], ignore_index=True)
+
+        # Create a 2x3 plot grid
+        fig, axes = plt.subplots(2, 3, figsize=(18, 10))
+        axes = axes.flatten()
+
+        for i, gene in enumerate(genes):
+            if gene not in combined_df.columns:
+                print(f"Skipping {gene} (not found in dataframe)")
+                continue
+
+            ax = axes[i]
+
+            # Boxplot
+            sns.boxplot(x="Timepoint", y=gene, data=combined_df, ax=ax, palette="Set2")
+
+            # Stripplot for individual data points
+            sns.stripplot(x="Timepoint", y=gene, data=combined_df, color="k", alpha=0.5, ax=ax)
+
+            ax.set_title(gene)
+            ax.set_xlabel("")
+            ax.set_xticklabels(ax.get_xticklabels(), rotation=45)
+
+        plt.suptitle(f"Gene Expression: {title}")
+        plt.tight_layout()
+        plt.savefig("/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results/" + str(title) + ".png")
+        plt.show()
+
+
 def remove_zero_genes(df):
     """
     Removes genes (columns) that are all zeros or that have zeros in more than 50% of the rows.
@@ -629,7 +798,7 @@ def gather_significant_genes(outdir, consortium, threshold_label):
 def main():
     # define base directories
     BASE_DIR = "/home/mkh062/Desktop/scratch/TCGA_project"
-    PROCESSED_DATA_DIR = os.path.join(BASE_DIR, "processed_data/try2")
+    PROCESSED_DATA_DIR = os.path.join(BASE_DIR, "processed_data")
     RESULTS_DIR = os.path.join(PROCESSED_DATA_DIR, "results")
 
     os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
@@ -688,8 +857,8 @@ def main():
     # plot_expression_grid_three_datasets(df_before_dict, df_after_dict, genes_of_interest_5, RESULTS_DIR)
 
     # 5) Run limma for thresholds
-    thresholds_fixed = [24, 60]
-    thresholds_range = [(24,48), (24,60)]
+    thresholds_fixed = [36, 48]
+    #thresholds_range = [(24,48), (24,60)]
 
     # fixed
     for threshold in thresholds_fixed:
@@ -701,13 +870,13 @@ def main():
                                        outdir=RESULTS_DIR)
 
     # range
-    for (low,high) in thresholds_range:
-        for ds_data, ds_name in [(tcga_data, "TCGA"), (cgga_data, "CGGA"), (glass_data, "GLASS")]:
-            res = limma(ds_data.copy(),
-                                       threshold=(low,high),
-                                       consortium=ds_name,
-                                       threshold_type="range",
-                                       outdir=RESULTS_DIR)
+    # for (low,high) in thresholds_range:
+    #     for ds_data, ds_name in [(tcga_data, "TCGA"), (cgga_data, "CGGA"), (glass_data, "GLASS")]:
+    #         res = limma(ds_data.copy(),
+    #                                    threshold=(low,high),
+    #                                    consortium=ds_name,
+    #                                    threshold_type="range",
+    #                                    outdir=RESULTS_DIR)
 
     # 6) For each threshold, gather union of sig genes, do coexpression & scatter
     # def process_threshold(th_label, threshold_type="fixed"):
@@ -760,5 +929,63 @@ def main():
 
 if __name__=="__main__":
     main()
+
+###############################################################################
+# 2. Main script
+###############################################################################
+# if __name__ == "__main__":
+#     # --------------------------------------------------------------------------
+#     # A) Load and prepare data
+#     # ------------------------------
+#     # --------------------------------------------
+#     BASE_DIR = "/home/mkh062/Desktop/scratch/TCGA_project"
+#     PROCESSED_DATA_DIR = os.path.join(BASE_DIR, "processed_data/try2")
+#     df, glass_before, glass_after = load_GLASS(
+#         outdir=PROCESSED_DATA_DIR
+#     )
+#
+#     # Identify the gene columns (i.e., everything except metadata + 'Group')
+#     meta_cols = ['Sample.ID', 'Overall.Survival.Months', 'Diagnosis.Age', 'Sex', 'case.vital.status']
+#     gene_cols = [c for c in df.columns if c not in meta_cols]
+#     # Define survival groups
+#     df_all = define_survival_groups_all(df)
+#     # Run PCA and plot
+#     pca_plot_glass(df_all, gene_cols, title="PCA of GLASS Data (Survival Groups)")
+#
+#     # --------------------------------------------------------------------------
+#     # B) Read significant gene lists for each comparison
+#     #    For example:
+#     #       - 24-48 => significant_genes_GLASS_24-48-months.csv
+#     #       - 24-60 => significant_genes_GLASS_24-60-months.csv
+#     #       - 60    => significant_genes_GLASS_60-months.csv
+#     # (Adjust paths as needed.)
+#     # --------------------------------------------------------------------------
+#     sig_24_48_file = "/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results/significant_genes_GLASS_24-48-months.csv"
+#     sig_24_60_file = "/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results/significant_genes_GLASS_24-60-months.csv"
+#     sig_60_file = "/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results/significant_genes_GLASS_60-months.csv"
+#
+#     sig_24_48 = pd.read_csv(sig_24_48_file)
+#     sig_24_60 = pd.read_csv(sig_24_60_file)
+#     sig_60 = pd.read_csv(sig_60_file)
+#
+#     # If the gene column is named differently, adjust here
+#     genes_24_48 = list(sig_24_48["Gene"]) if "Gene" in sig_24_48.columns else []
+#     genes_24_60 = list(sig_24_60["Gene"]) if "Gene" in sig_24_60.columns else []
+#     genes_60 = list(sig_60["Gene"]) if "Gene" in sig_60.columns else []
+#
+#     # -------- Comparison 1: 24 vs >=48 --------
+#     df_24 = define_survival_groups(df, low_threshold=24, high_threshold=24)
+#     df_24_48 = define_survival_groups(df, low_threshold=24, high_threshold=48)
+#     print(f"Comparison 24 vs 24–48: {df_24_48.shape[0]} samples kept")
+#
+#     # -------- Comparison 2: 24 vs >=60 --------
+#     df_24_60 = define_survival_groups(df, low_threshold=24, high_threshold=60)
+#     print(f"Comparison 24 vs 24–60: {df_24_60.shape[0]} samples kept")
+#
+#     # -------- Comparison 3: 60 file  --------
+#     df_60 = define_survival_groups(df, low_threshold=60, high_threshold=60)
+#     print(f"Comparison 24 vs 60: {df_60.shape[0]} samples kept")
+#     # Box plots for top 6 significant genes
+#     boxplots_glass(df_24, df_24_48, df_24_60, df_60, genes_24_48, genes_24_60, genes_60)
 
 

@@ -285,11 +285,11 @@ def summarize_threshold_overlaps(consortium, cox_sig_genes_file, outdir,
             continue
 
         limma_df = pd.read_csv(limma_file)
-        if 'gene' not in limma_df.columns:
+        if 'Gene' not in limma_df.columns:
             # adjust to your actual column name if needed
             continue
 
-        limma_genes = set(limma_df['gene'].unique())
+        limma_genes = set(limma_df['Gene'].unique())
         n_limma = len(limma_genes)
         n_common = len(cox_genes.intersection(limma_genes))
 
@@ -311,10 +311,10 @@ def summarize_threshold_overlaps(consortium, cox_sig_genes_file, outdir,
             continue
 
         limma_df = pd.read_csv(limma_file)
-        if 'gene' not in limma_df.columns:
+        if 'Gene' not in limma_df.columns:
             continue
 
-        limma_genes = set(limma_df['gene'].unique())
+        limma_genes = set(limma_df['Gene'].unique())
         n_limma = len(limma_genes)
         n_common = len(cox_genes.intersection(limma_genes))
 
@@ -342,34 +342,34 @@ if __name__ == "__main__":
     os.makedirs(outdir, exist_ok=True)
     #
     # # Analyze each dataset
-    analyze_dataset(tcga_csv, "TCGA", outdir, alpha_fdr=0.10)
-    analyze_dataset(glass_csv, "GLASS", outdir, alpha_fdr=0.4)
-    analyze_dataset(cgga_csv, "CGGA", outdir, alpha_fdr=0.5)
+    # analyze_dataset(tcga_csv, "TCGA", outdir, alpha_fdr=0.10)
+    # analyze_dataset(glass_csv, "GLASS", outdir, alpha_fdr=0.4)
+    # analyze_dataset(cgga_csv, "CGGA", outdir, alpha_fdr=0.5)
 
-    # # 2. Summaries of how many genes from LIMMA results overlap with the Cox results
-    # thresholds_fixed = [24, 60]
-    # thresholds_range = [(24, 48), (24, 60)]
-    # results_dir1 = '/home/mkh062/Desktop/scratch/TCGA_project/processed_data/cox_results'
-    # results_dir = '/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results'
-    # summary_frames = []
-    # for consortium in ["TCGA", "CGGA", "GLASS"]:
-    #     cox_sig_file = os.path.join(results_dir1, f"{consortium}_cox_significant_genes.csv")
-    #     summary_df = summarize_threshold_overlaps(
-    #         consortium=consortium,
-    #         cox_sig_genes_file=cox_sig_file,
-    #         outdir=results_dir,
-    #         thresholds_fixed=thresholds_fixed,
-    #         thresholds_range=thresholds_range
-    #     )
-    #     summary_frames.append(summary_df)
-    #
-    # # Combine all datasets' summaries
-    # final_summary = pd.concat(summary_frames, ignore_index=True)
-    # summary_outpath = os.path.join(results_dir, "cox_limma_summary.csv")
-    # final_summary.to_csv(summary_outpath, index=False)
-    #
-    # print("\n=== Summary of limma & Cox overlaps ===")
-    # print(final_summary)
-    # print(f"\nSummary saved to: {summary_outpath}")
-    #
-    # print("Done!")
+    # 2. Summaries of how many genes from LIMMA results overlap with the Cox results
+    thresholds_fixed = [24, 36, 48, 60]
+    thresholds_range = [(24, 48), (24, 60)]
+    results_dir1 = '/home/mkh062/Desktop/scratch/TCGA_project/processed_data/cox_results'
+    results_dir = '/home/mkh062/Desktop/scratch/TCGA_project/processed_data/results'
+    summary_frames = []
+    for consortium in ["TCGA", "CGGA", "GLASS"]:
+        cox_sig_file = os.path.join(results_dir1, f"{consortium}_cox_significant_genes.csv")
+        summary_df = summarize_threshold_overlaps(
+            consortium=consortium,
+            cox_sig_genes_file=cox_sig_file,
+            outdir=results_dir,
+            thresholds_fixed=thresholds_fixed,
+            thresholds_range=thresholds_range
+        )
+        summary_frames.append(summary_df)
+
+    # Combine all datasets' summaries
+    final_summary = pd.concat(summary_frames, ignore_index=True)
+    summary_outpath = os.path.join(results_dir, "cox_limma_summary.csv")
+    final_summary.to_csv(summary_outpath, index=False)
+
+    print("\n=== Summary of limma & Cox overlaps ===")
+    print(final_summary)
+    print(f"\nSummary saved to: {summary_outpath}")
+
+    print("Done!")

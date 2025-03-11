@@ -338,7 +338,7 @@ def TCGA_CGGA_integrate():
     plt.legend()
     output_dir ='/home/mkh062/Desktop/scratch/TCGA_project/processed_data/TCGA_CGGA_integrated/'
     pca_plot_path = os.path.join(output_dir, "PCA_plot.png")
-    plt.savefig(pca_plot_path, dpi=300, bbox_inches='tight')
+    #plt.savefig(pca_plot_path, dpi=300, bbox_inches='tight')
     plt.show()
     combined_data = combined_data.drop(columns=['Platform'])
     return combined_data
@@ -351,7 +351,7 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     tcga_cgga = TCGA_CGGA_integrate()
     print("tcga_cgga", tcga_cgga)
-    thresholds_fixed = [24, 60]
+    thresholds_fixed = [24, 60, 36, 48]
     thresholds_range = [(24, 48), (24, 60)]
 
     for threshold in thresholds_fixed:
